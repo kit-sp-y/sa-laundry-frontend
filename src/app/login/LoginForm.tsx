@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import Image from "next/image";
+import { login } from "@/api/auth/POST";
 
 export default function LoginForm() {
   const [phone_number, setPhoneNumber] = useState(""); // เปลี่ยนจาก setEmail เป็น setPhoneNumber
@@ -26,78 +27,108 @@ export default function LoginForm() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone_number,
-          password,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setError(errorData.message || "เข้าสู่ระบบไม่สำเร็จ");
-        return;
+      const data = await login(phone_number, password);
+      // เก็บ token และ role ใน localStorage
+      if (data && typeof data === 'object' && 'token' in data) {
+        localStorage.setItem("auth_token", String(data.token));
+        
+        // เก็บ role
+        if ('role' in data && data.role) {
+          localStorage.setItem("user_role", String(data.role));
+        } else if ('user' in data && data.user && 'role' in data.user) {
+          localStorage.setItem("user_role", String(data.user.role));
+        }
+        
+        // เก็บข้อมูล user
+        if ('user' in data && data.user) {
+          localStorage.setItem("user_data", JSON.stringify(data.user));
+        }
       }
 
-      const data = await response.json();
-      console.log("Login successful:", data);
+      // เปลี่ยนเส้นทางตาม role
+      const userRole = data.role || (data.user && data.user.role);
+      const userId = data.user?.id;
 
-      // ตัวอย่าง: เก็บ token ใน localStorage หรือ sessionStorage
-      if (data.token) {
-        localStorage.setItem("auth_token", data.token);
+      switch (userRole) {
+        case "customer":
+          if (userId) {
+            window.location.href = `/${userId}`;
+          } else {
+            console.error("Customer userId is undefined!");
+            setError("ไม่สามารถระบุตัวตนผู้ใช้ได้");
+          }
+          break;
+        case "admin":
+          window.location.href = "/admin";
+          break;
+        case "cashier":
+        case "laundryAttendant":
+          window.location.href = "/staff";
+          break;
+        default:
+          // ถ้าไม่มี role หรือ role ไม่ตรงกับที่กำหนด ให้ไปหน้าหลัก
+          window.location.href = "/";
+          break;
       }
-
-      // เปลี่ยนเส้นทางไปยังหน้าอื่นหลังจากเข้าสู่ระบบสำเร็จ
-      window.location.href = "/";
-    } catch (err) {
-      setError("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+    } catch (err: unknown) {
+      let errorMsg = "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์";
+      
+      if (err && typeof err === 'object') {
+        if ('response' in err) {
+          const response = err.response as { data?: { error?: string; message?: string } };
+          errorMsg = response?.data?.error || response?.data?.message || errorMsg;
+        } else if ('message' in err) {
+          errorMsg = String(err.message);
+        }
+      }
+      
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="w-full max-w-lg rounded-2xl border border-sky-100/60 bg-white/80 p-8 shadow-xl backdrop-blur-md dark:border-white/10 dark:bg-neutral-900/70">
-      <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-xl bg-white text-sky-700 ring-1 ring-sky-200/70">
-          <Image src="/pp_laundry_logo.png" alt="PP Laundry Logo" width={100} height={100}/>
+    <div className="w-full max-w-md border-4 border-[#0EA5E9] bg-white p-8 shadow-lg">
+      {/* Logo */}
+      <div className="mx-auto mb-4 flex w-32 justify-center">
+        <Image src="/pp_laundry_logo.png" alt="PP Laundry Logo" width={120} height={120} />
       </div>
-      <h1 className="mb-1 text-center text-2xl font-semibold tracking-tight text-neutral-900 dark:text-white">
-        P.P. Laundry ยินดีต้อนรับ
+      
+      {/* Title */}
+      <h1 className="mb-6 text-center text-2xl font-bold text-gray-800">
+        เข้าสู่ระบบ
       </h1>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
+        <div className="mb-4 rounded bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-5">
+        {/* Phone Number Field */}
         <div>
-          <label htmlFor="phone_number" className="mb-1 block text-sm font-medium text-neutral-800 dark:text-neutral-200">
-            หมายเลขโทรศัพท์
+          <label htmlFor="phone_number" className="mb-2 block text-sm text-gray-700">
+            กรอกหมายเลขโทรศัพท์
           </label>
           <input
             id="phone_number"
             type="tel"
             autoComplete="tel"
             value={phone_number}
-            onChange={(e) => setPhoneNumber(e.target.value)} // เปลี่ยนจาก setEmail เป็น setPhoneNumber
-            className="block w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-neutral-900 shadow-sm outline-none ring-0 placeholder:text-neutral-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-200 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-sky-700 dark:focus:ring-sky-900"
-            placeholder="กรอกหมายเลขโทรศัพท์"
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            className="block w-full rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/20"
+            placeholder=""
           />
         </div>
+
+        {/* Password Field */}
         <div>
-          <div className="mb-1 flex items-center justify-between">
-            <label htmlFor="password" className="block text-sm font-medium text-neutral-800 dark:text-neutral-200">
-              รหัสผ่าน
+          <div className="mb-2 flex items-center justify-between">
+            <label htmlFor="password" className="block text-sm text-gray-700">
+              กรอกรหัสผ่าน
             </label>
-            <a href="#" className="text-sm text-sky-600 hover:underline dark:text-sky-400">
-              ลืมรหัสผ่าน?
-            </a>
           </div>
           <input
             id="password"
@@ -105,25 +136,27 @@ export default function LoginForm() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="block w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-neutral-900 shadow-sm outline-none ring-0 placeholder:text-neutral-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-200 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder:text-neutral-500 dark:focus:border-sky-700 dark:focus:ring-sky-900"
-            placeholder="กรอกรหัสผ่าน"
+            className="block w-full rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/20"
+            placeholder=""
           />
         </div>
+
+        {/* Submit Button */}
         <button
           type="submit"
           disabled={loading}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF971D] px-4 py-2.5 text-white shadow-sm transition hover:bg-[#e68619] disabled:opacity-60 disabled:hover:bg-[#FF971D] focus:outline-none focus:ring-2 focus:ring-orange-300 dark:focus:ring-orange-800"
+          className="w-full rounded-full bg-[#FF971D] px-6 py-3 font-semibold text-white shadow-md transition hover:bg-[#e68619] disabled:opacity-60 disabled:hover:bg-[#FF971D] focus:outline-none focus:ring-2 focus:ring-[#FF971D]/50"
         >
           {loading ? (
-            <>
-              <svg className="size-5 animate-spin" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <span className="flex items-center justify-center gap-2">
+              <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
               </svg>
               กำลังเข้าสู่ระบบ...
-            </>
+            </span>
           ) : (
-            <>เข้าสู่ระบบ</>
+            "เข้าสู่ระบบ"
           )}
         </button>
       </form>
