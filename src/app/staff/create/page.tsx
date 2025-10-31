@@ -239,7 +239,7 @@ export default function StaffCreateOrderPage() {
         } else if (serviceType === "รีด") {
           requiredCouponName = "iron";
         } else if (serviceType === "ซักมือ") {
-          requiredCouponName = "handwash";
+          requiredCouponName = "hand wash";
         }
 
         // ตรวจสอบว่ามีคูปองที่ยังไม่หมดอายุ, มี point เหลือ, และตรงกับ service type
@@ -678,7 +678,7 @@ export default function StaffCreateOrderPage() {
                       let shouldShow = false;
                       if (serviceType === "ซักอบรีด" && coupon.cp_name.toLowerCase() === "machine") shouldShow = true;
                       if (serviceType === "รีด" && coupon.cp_name.toLowerCase() === "iron") shouldShow = true;
-                      if (serviceType === "ซักมือ" && coupon.cp_name.toLowerCase() === "handwash") shouldShow = true;
+                      if (serviceType === "ซักมือ" && coupon.cp_name.toLowerCase() === "hand wash") shouldShow = true;
                       
                       if (!shouldShow) return null;
 
